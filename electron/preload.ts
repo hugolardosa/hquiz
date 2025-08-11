@@ -2,9 +2,16 @@ import { contextBridge, ipcRenderer } from 'electron'
 
 // --------- Expose some API to the Renderer process ---------
 contextBridge.exposeInMainWorld('electronAPI', {
-  saveQuestionnaire: (data: any) => ipcRenderer.invoke('save-questionnaire', data),
-  loadQuestionnaire: () => ipcRenderer.invoke('load-questionnaire'),
-  
+  // File operations
+  dialogOpenQuestionnaire: () => ipcRenderer.invoke('dialog-open-questionnaire'),
+  dialogSaveQuestionnaireAs: (content: string, suggestedName?: string) => ipcRenderer.invoke('dialog-save-questionnaire-as', content, suggestedName),
+  writeQuestionnaireToPath: (filePath: string, content: string) => ipcRenderer.invoke('write-questionnaire-to-path', filePath, content),
+
+  // Menu actions
+  onMenuAction: (callback: (payload: { type: 'new' | 'open' | 'save' | 'save-as' }) => void) => {
+    ipcRenderer.on('menu-action', (_event, payload) => callback(payload))
+  },
+
   // Event listeners
   onMainProcessMessage: (callback: (message: string) => void) => {
     ipcRenderer.on('main-process-message', (event, message) => callback(message))

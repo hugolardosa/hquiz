@@ -10,7 +10,7 @@
     "electron": "electron .",
     "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
     "build:electron": "vite build && electron-builder",
-    "preview": "vite preview"
+    "preview": "vite preview --host"
   },
   "dependencies": {
     "@mantine/core": "^7.3.0",
@@ -46,6 +46,15 @@
     "files": [
       "dist/**/*",
       "dist-electron/**/*"
-    ]
+    ],
+    "mac": {
+      "icon": "build/icons/icon.icns"
+    },
+    "win": {
+      "icon": "build/icons/icon.ico"
+    },
+    "linux": {
+      "icon": "build/icons/icon.png"
+    }
   }
 }

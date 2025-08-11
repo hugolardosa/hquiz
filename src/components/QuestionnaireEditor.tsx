@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useEffect } from 'react'
 import { 
   Paper, 
   Title, 
@@ -13,9 +13,11 @@ import {
   Text,
   ActionIcon,
   FileInput,
-  Badge
+  Badge,
+  Divider,
+  Tooltip
 } from '@mantine/core'
-import { IconPlus, IconTrash, IconUpload, IconDownload, IconFileImport } from '@tabler/icons-react'
+import { IconPlus, IconTrash, IconUpload, IconFile, IconFolderOpen, IconDeviceFloppy } from '@tabler/icons-react'
 import { notifications } from '@mantine/notifications'
 import { Question, Questionnaire } from '../types'
 import { useQuestionnaireStorage } from '../hooks/useQuestionnaireStorage'
@@ -26,10 +28,12 @@ interface QuestionnaireEditorProps {}
 const QuestionnaireEditor: React.FC<QuestionnaireEditorProps> = () => {
   const {
     questionnaire,
+    currentFilePath,
     setQuestionnaire,
     saveQuestionnaire,
-    exportQuestionnaire,
-    importQuestionnaire,
+    saveQuestionnaireAs,
+    openQuestionnaireFromDisk,
+    newQuestionnaire,
     isLoaded
   } = useQuestionnaireStorage()
 
@@ -101,54 +105,49 @@ const QuestionnaireEditor: React.FC<QuestionnaireEditorProps> = () => {
   const handleSave = async () => {
     if (!questionnaire) return
     
+    if (!currentFilePath) {
+      const result = await saveQuestionnaireAs(questionnaire)
+      if (result.success) {
+        notifications.show({ title: 'Salvo!', message: 'Questionário salvo', color: 'green' })
+      }
+      return
+    }
     const success = await saveQuestionnaire(questionnaire)
     if (success) {
-      notifications.show({
-        title: 'Salvo!',
-        message: 'Questionário salvo com sucesso',
-        color: 'green'
-      })
+      notifications.show({ title: 'Salvo!', message: 'Questionário salvo', color: 'green' })
     } else {
-      notifications.show({
-        title: 'Erro',
-        message: 'Falha ao salvar questionário',
-        color: 'red'
-      })
+      notifications.show({ title: 'Erro', message: 'Falha ao salvar questionário', color: 'red' })
     }
   }
 
-  const handleExport = () => {
-    exportQuestionnaire()
-    notifications.show({
-      title: 'Exportado!',
-      message: 'Questionário exportado com sucesso',
-      color: 'blue'
-    })
+  const handleNew = () => {
+    newQuestionnaire(() => ({
+      id: uuidv4(),
+      title: 'Novo Questionário',
+      description: '',
+      questions: [],
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }))
+    notifications.show({ title: 'Novo', message: 'Novo questionário iniciado', color: 'blue' })
   }
 
-  const handleImport = (file: File | null) => {
-    if (!file) return
-    
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      const content = e.target?.result as string
-      const success = importQuestionnaire(content)
-      if (success) {
-        notifications.show({
-          title: 'Importado!',
-          message: 'Questionário importado com sucesso',
-          color: 'green'
-        })
-      } else {
-        notifications.show({
-          title: 'Erro',
-          message: 'Falha ao importar questionário. Verifique o formato do arquivo.',
-          color: 'red'
-        })
-      }
+  const handleOpen = async () => {
+    const result = await openQuestionnaireFromDisk()
+    if (result.success) {
+      notifications.show({ title: 'Aberto', message: 'Questionário aberto do arquivo', color: 'blue' })
     }
-    reader.readAsText(file)
   }
+
+  const handleSaveAs = async () => {
+    if (!questionnaire) return
+    const result = await saveQuestionnaireAs(questionnaire)
+    if (result.success) {
+      notifications.show({ title: 'Salvo', message: 'Questionário salvo como novo arquivo', color: 'green' })
+    }
+  }
+
+  
 
   const updateQuestionnaireField = (field: keyof Questionnaire, value: any) => {
     if (!questionnaire) return
@@ -163,6 +162,21 @@ const QuestionnaireEditor: React.FC<QuestionnaireEditorProps> = () => {
     saveQuestionnaire(updatedQuestionnaire)
   }
 
+  // Hook into app menu actions to mirror classic File menu behavior
+  useEffect(() => {
+    if (!window.electronAPI?.onMenuAction) return
+    const handler = async (payload: { type: 'new' | 'open' | 'save' | 'save-as' }) => {
+      if (payload.type === 'new') handleNew()
+      if (payload.type === 'open') await handleOpen()
+      if (payload.type === 'save') await handleSave()
+      if (payload.type === 'save-as') await handleSaveAs()
+    }
+    window.electronAPI.onMenuAction(handler)
+    return () => {
+      window.electronAPI.removeAllListeners?.('menu-action')
+    }
+  }, [questionnaire, currentFilePath])
+
   if (!questionnaire) {
     return (
       <Paper p="xl" withBorder style={{ textAlign: 'center' }}>
@@ -173,30 +187,35 @@ const QuestionnaireEditor: React.FC<QuestionnaireEditorProps> = () => {
 
   return (
     <Stack gap="lg">
+      <Paper p="sm" withBorder>
+        <Group justify="space-between" align="center">
+          <Group gap="xs">
+            <Tooltip label="Novo">
+              <Button variant="light" leftSection={<IconFile size={16} />} onClick={handleNew}>Novo</Button>
+            </Tooltip>
+            <Tooltip label="Abrir…">
+              <Button variant="light" leftSection={<IconFolderOpen size={16} />} onClick={handleOpen}>Abrir…</Button>
+            </Tooltip>
+            <Divider orientation="vertical" mx="xs" />
+            <Tooltip label="Salvar">
+              <Button variant="filled" color="green" leftSection={<IconDeviceFloppy size={16} />} onClick={handleSave}>Salvar</Button>
+            </Tooltip>
+            <Tooltip label="Salvar como…">
+              <Button variant="light" leftSection={<IconDeviceFloppy size={16} />} onClick={handleSaveAs}>Salvar como…</Button>
+            </Tooltip>
+            
+          </Group>
+          <Text size="sm" c="dimmed">{currentFilePath ? currentFilePath : 'Sem arquivo'}</Text>
+        </Group>
+      </Paper>
+
       <Paper p="md" withBorder>
         <Stack gap="md">
-          <Title order={2}>Editor de Questionário</Title>
           <Group grow>
             <TextInput
               label="Título"
               value={questionnaire.title}
               onChange={(e) => updateQuestionnaireField('title', e.target.value)}
-            />
-            <Button onClick={handleSave}>Salvar Questionário</Button>
-          </Group>
-          <Group grow>
-            <Button 
-              leftSection={<IconDownload size={16} />} 
-              variant="outline"
-              onClick={handleExport}
-            >
-              Exportar
-            </Button>
-            <FileInput
-              placeholder="Importar questionário"
-              leftSection={<IconFileImport size={16} />}
-              accept=".json"
-              onChange={handleImport}
             />
           </Group>
           <Textarea
@@ -271,6 +290,7 @@ const QuestionEditor: React.FC<QuestionEditorProps> = ({
             onChange={(value) => onUpdate({ type: value as Question['type'] })}
             data={[
               { value: 'multiple-choice', label: 'Múltipla Escolha' },
+              { value: 'image-choice', label: 'Escolha por Imagem' },
               { value: 'true-false', label: 'Verdadeiro/Falso' },
               { value: 'text', label: 'Resposta de Texto' }
             ]}
@@ -291,17 +311,32 @@ const QuestionEditor: React.FC<QuestionEditorProps> = ({
           placeholder="Digite sua pergunta aqui..."
         />
 
-        {question.type === 'multiple-choice' && (
+        {(question.type === 'multiple-choice' || question.type === 'image-choice') && (
           <Stack gap="sm">
             <Text size="sm" fw={500}>Respostas</Text>
             {question.answers.map((answer, idx) => (
               <Group key={idx} align="flex-end">
-                <TextInput
-                  style={{ flex: 1 }}
-                  placeholder={`Resposta ${idx + 1}`}
-                  value={answer}
-                  onChange={(e) => updateAnswer(idx, e.target.value)}
-                />
+                {question.type === 'image-choice' ? (
+                  <FileInput
+                    style={{ flex: 1 }}
+                    placeholder={`Imagem ${idx + 1}`}
+                    accept="image/*"
+                    leftSection={<IconUpload size={16} />}
+                    onChange={(file) => {
+                      if (!file) return
+                      const reader = new FileReader()
+                      reader.onload = (e) => updateAnswer(idx, (e.target?.result as string) || '')
+                      reader.readAsDataURL(file)
+                    }}
+                  />
+                ) : (
+                  <TextInput
+                    style={{ flex: 1 }}
+                    placeholder={`Resposta ${idx + 1}`}
+                    value={answer}
+                    onChange={(e) => updateAnswer(idx, e.target.value)}
+                  />
+                )}
                 <Button
                   variant={question.correctAnswer === idx ? 'filled' : 'light'}
                   color={question.correctAnswer === idx ? 'green' : 'gray'}

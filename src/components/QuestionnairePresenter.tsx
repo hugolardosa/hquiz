@@ -5,20 +5,18 @@ import {
   Button, 
   Group, 
   Stack, 
-  Grid,
   Card,
   Text,
   Progress,
   Center,
   Image,
-  Modal,
   SimpleGrid,
   Badge,
   Box,
   Switch
 } from '@mantine/core'
 import { IconRefresh, IconCheck, IconX, IconEye, IconEyeOff } from '@tabler/icons-react'
-import { Question, Questionnaire, SessionProgress, QuestionProgress } from '../types'
+import { Question, SessionProgress } from '../types'
 import { useQuestionnaireStorage } from '../hooks/useQuestionnaireStorage'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -30,7 +28,6 @@ const QuestionnairePresenter: React.FC<QuestionnairePresenterProps> = () => {
     sessionProgress,
     setSessionProgress,
     saveSessionProgress,
-    clearSessionProgress,
     saveSessionToHistory,
     isLoaded
   } = useQuestionnaireStorage()
@@ -238,26 +235,35 @@ const QuestionnairePresenter: React.FC<QuestionnairePresenterProps> = () => {
               {currentQuestion.question}
             </Title>
 
-            {currentQuestion.type === 'multiple-choice' && !showAnswer && (
+            {(currentQuestion.type === 'multiple-choice' || currentQuestion.type === 'image-choice') && !showAnswer && (
               <SimpleGrid cols={2} spacing="md" style={{ width: '100%', maxWidth: '600px' }}>
-                {currentQuestion.answers.map((answer, index) => (
-                                     <Button
-                     key={index}
-                     variant="outline"
-                     size="lg"
-                     className="answer-button"
-                     style={{ height: 'auto', padding: '16px' }}
-                     onClick={() => {
-                       if (index === currentQuestion.correctAnswer) {
-                         handleCorrectAnswer()
-                       } else {
-                         handleWrongAnswer()
-                       }
-                     }}
-                   >
-                    {String.fromCharCode(65 + index)}: {answer}
-                  </Button>
-                ))}
+                {currentQuestion.answers.map((answer, index) => {
+                  const handleClick = () => {
+                    if (index === currentQuestion.correctAnswer) handleCorrectAnswer(); else handleWrongAnswer()
+                  }
+                  if (currentQuestion.type === 'image-choice') {
+                    return (
+                      <Card key={index} withBorder p="sm" onClick={handleClick} style={{ cursor: 'pointer' }}>
+                        <Stack align="center" gap="xs">
+                          <Image src={answer} alt={`Opção ${index + 1}`} h={140} fit="contain" />
+                          <Badge>{String.fromCharCode(65 + index)}</Badge>
+                        </Stack>
+                      </Card>
+                    )
+                  }
+                  return (
+                    <Button
+                      key={index}
+                      variant="outline"
+                      size="lg"
+                      className="answer-button"
+                      style={{ height: 'auto', padding: '16px' }}
+                      onClick={handleClick}
+                    >
+                      {String.fromCharCode(65 + index)}: {answer}
+                    </Button>
+                  )
+                })}
               </SimpleGrid>
             )}
 
@@ -315,10 +321,17 @@ const QuestionnairePresenter: React.FC<QuestionnairePresenterProps> = () => {
                    </Box>
                  )}
 
-                                <Paper p="md" withBorder style={{ backgroundColor: '#f8f9fa' }}>
-                  <Text size="lg" fw={500}>
-                    Resposta Correta: {currentQuestion.answers[currentQuestion.correctAnswer]}
-                  </Text>
+                <Paper p="md" withBorder style={{ backgroundColor: '#f8f9fa' }}>
+                  {currentQuestion.type === 'image-choice' ? (
+                    <Stack align="center" gap="xs">
+                      <Text size="lg" fw={500}>Resposta Correta:</Text>
+                      <Image src={currentQuestion.answers[currentQuestion.correctAnswer]} alt="Correta" h={160} fit="contain" />
+                    </Stack>
+                  ) : (
+                    <Text size="lg" fw={500}>
+                      Resposta Correta: {currentQuestion.answers[currentQuestion.correctAnswer]}
+                    </Text>
+                  )}
                 </Paper>
 
                 <Button 

@@ -9,6 +9,7 @@ const STORAGE_KEYS = {
 
 export const useQuestionnaireStorage = () => {
   const [questionnaire, setQuestionnaire] = useState<Questionnaire | null>(null)
+  const [currentFilePath, setCurrentFilePath] = useState<string | null>(null)
   const [sessionProgress, setSessionProgress] = useState<SessionProgress | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
 
@@ -38,19 +39,74 @@ export const useQuestionnaireStorage = () => {
 
   const saveQuestionnaire = useCallback(async (data: Questionnaire) => {
     try {
-      // Use Electron API if available
-      if (window.electronAPI) {
-        await window.electronAPI.saveQuestionnaire(data)
-      }
-      
       // Always save to localStorage as backup
       localStorage.setItem(STORAGE_KEYS.QUESTIONNAIRE, JSON.stringify(data))
       setQuestionnaire(data)
+
+      // If we have a file path, write directly; otherwise leave to Save As
+      if (window.electronAPI && currentFilePath) {
+        const content = JSON.stringify(data, null, 2)
+        const result = await window.electronAPI.writeQuestionnaireToPath(currentFilePath, content)
+        if (!result.success) throw new Error(result.error || 'Failed to save file')
+      }
+
+      // Always save to localStorage as backup
       return true
     } catch (error) {
       console.error('Erro ao salvar questionário:', error)
       return false
     }
+  }, [currentFilePath])
+
+  const saveQuestionnaireAs = useCallback(async (data: Questionnaire) => {
+    try {
+      const content = JSON.stringify(data, null, 2)
+      const suggestedName = `${data.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_questionnaire.json`
+      if (window.electronAPI) {
+        const result = await window.electronAPI.dialogSaveQuestionnaireAs(content, suggestedName)
+        if (result.success && result.filePath) {
+          setCurrentFilePath(result.filePath)
+          // backup
+          localStorage.setItem(STORAGE_KEYS.QUESTIONNAIRE, JSON.stringify(data))
+          setQuestionnaire(data)
+          return { success: true, filePath: result.filePath }
+        }
+        return { success: false, canceled: result.canceled }
+      }
+      return { success: false }
+    } catch (error) {
+      console.error('Erro no salvar como:', error)
+      return { success: false }
+    }
+  }, [])
+
+  const openQuestionnaireFromDisk = useCallback(async () => {
+    try {
+      if (!window.electronAPI) return { success: false }
+      const result = await window.electronAPI.dialogOpenQuestionnaire()
+      if (result.success && result.content && result.filePath) {
+        const parsed = JSON.parse(result.content)
+        // Convert dates
+        parsed.createdAt = new Date(parsed.createdAt)
+        parsed.updatedAt = new Date(parsed.updatedAt)
+        setQuestionnaire(parsed)
+        localStorage.setItem(STORAGE_KEYS.QUESTIONNAIRE, JSON.stringify(parsed))
+        setCurrentFilePath(result.filePath)
+        return { success: true }
+      }
+      return { success: false, canceled: result.canceled }
+    } catch (error) {
+      console.error('Erro ao abrir questionário:', error)
+      return { success: false }
+    }
+  }, [])
+
+  const newQuestionnaire = useCallback((factory: () => Questionnaire) => {
+    const data = factory()
+    setQuestionnaire(data)
+    setCurrentFilePath(null)
+    localStorage.setItem(STORAGE_KEYS.QUESTIONNAIRE, JSON.stringify(data))
+    return data
   }, [])
 
   const loadSessionProgress = useCallback(() => {
@@ -166,12 +222,16 @@ export const useQuestionnaireStorage = () => {
 
   return {
     questionnaire,
+    currentFilePath,
     sessionProgress,
     isLoaded,
     setQuestionnaire,
     setSessionProgress,
     saveQuestionnaire,
+    saveQuestionnaireAs,
     loadQuestionnaire,
+    openQuestionnaireFromDisk,
+    newQuestionnaire,
     saveSessionProgress,
     loadSessionProgress,
     clearSessionProgress,

@@ -1,8 +1,8 @@
 export interface Question {
   id: string
-  type: 'multiple-choice' | 'true-false' | 'text'
+  type: 'multiple-choice' | 'true-false' | 'text' | 'image-choice'
   question: string
-  answers: string[]
+  answers: string[] // For 'image-choice', answers contain data URLs of images
   correctAnswer: number // Index of correct answer
   timeLimit: number // Time in seconds, default 60
   image?: string // Base64 encoded image or file path
@@ -44,8 +44,10 @@ export interface AppSettings {
 declare global {
   interface Window {
     electronAPI: {
-      saveQuestionnaire: (data: any) => Promise<{ success: boolean }>
-      loadQuestionnaire: () => Promise<{ success: boolean; data: any }>
+      dialogOpenQuestionnaire: () => Promise<{ success: boolean; canceled?: boolean; filePath?: string; fileName?: string; content?: string; error?: string }>
+      dialogSaveQuestionnaireAs: (content: string, suggestedName?: string) => Promise<{ success: boolean; canceled?: boolean; filePath?: string; fileName?: string; error?: string }>
+      writeQuestionnaireToPath: (filePath: string, content: string) => Promise<{ success: boolean; filePath?: string; fileName?: string; error?: string }>
+      onMenuAction: (callback: (payload: { type: 'new' | 'open' | 'save' | 'save-as' }) => void) => void
       onMainProcessMessage: (callback: (message: string) => void) => void
       removeAllListeners: (channel: string) => void
     }
