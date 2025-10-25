@@ -38,6 +38,8 @@ const QuestionnairePresenter: React.FC<QuestionnairePresenterProps> = () => {
   const [showAnswer, setShowAnswer] = useState(false)
   const [questionResult, setQuestionResult] = useState<'correct' | 'wrong' | 'timeout' | null>(null)
   const [showQuestionText, setShowQuestionText] = useState<boolean>(true)
+  const [waitingForManualGrading, setWaitingForManualGrading] = useState(false)
+  const [questionAnswered, setQuestionAnswered] = useState(false)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
 
   // Load show question text preference
@@ -118,6 +120,8 @@ const QuestionnairePresenter: React.FC<QuestionnairePresenterProps> = () => {
     setIsTimerRunning(true)
     setShowAnswer(false)
     setQuestionResult(null)
+    setWaitingForManualGrading(false)
+    setQuestionAnswered(false)
     
     // Update session progress
     setSessionProgress(prev => prev ? {
@@ -131,7 +135,8 @@ const QuestionnairePresenter: React.FC<QuestionnairePresenterProps> = () => {
     
     setIsTimerRunning(false)
     setQuestionResult('correct')
-    setShowAnswer(true)
+    setQuestionAnswered(true)
+    // Don't show answer immediately
     
     // Update progress
     updateQuestionProgress(true, sessionProgress.currentQuestionIndex)
@@ -142,7 +147,8 @@ const QuestionnairePresenter: React.FC<QuestionnairePresenterProps> = () => {
     
     setIsTimerRunning(false)
     setQuestionResult('wrong')
-    setShowAnswer(true)
+    setQuestionAnswered(true)
+    // Don't show answer immediately
     
     // Update progress
     updateQuestionProgress(false, sessionProgress.currentQuestionIndex)
@@ -152,11 +158,41 @@ const QuestionnairePresenter: React.FC<QuestionnairePresenterProps> = () => {
     if (!currentQuestion || !sessionProgress) return
     
     setIsTimerRunning(false)
-    setQuestionResult('timeout')
-    setShowAnswer(true)
     
-    // Update progress
+    if (currentQuestion.type === 'text') {
+      // For text questions, don't mark as wrong automatically
+      // Instead, wait for manual grading
+      setWaitingForManualGrading(true)
+      setShowAnswer(false) // Don't show answer yet
+    } else {
+      setQuestionResult('timeout')
+      setQuestionAnswered(true)
+      // Don't show answer immediately
+      // Update progress
+      updateQuestionProgress(false, sessionProgress.currentQuestionIndex)
+    }
+  }
+
+  const handleManualCorrect = () => {
+    if (!currentQuestion || !sessionProgress) return
+    
+    setWaitingForManualGrading(false)
+    setQuestionResult('correct')
+    setQuestionAnswered(true)
+    updateQuestionProgress(true, sessionProgress.currentQuestionIndex)
+  }
+
+  const handleManualWrong = () => {
+    if (!currentQuestion || !sessionProgress) return
+    
+    setWaitingForManualGrading(false)
+    setQuestionResult('wrong')
+    setQuestionAnswered(true)
     updateQuestionProgress(false, sessionProgress.currentQuestionIndex)
+  }
+
+  const handleShowAnswer = () => {
+    setShowAnswer(true)
   }
 
   const updateQuestionProgress = (correct: boolean, questionIndex: number) => {
@@ -188,6 +224,8 @@ const QuestionnairePresenter: React.FC<QuestionnairePresenterProps> = () => {
     setTimeLeft(0)
     setShowAnswer(false)
     setQuestionResult(null)
+    setWaitingForManualGrading(false)
+    setQuestionAnswered(false)
   }
 
   const isQuestionAnswered = (questionIndex: number): boolean => {
@@ -323,6 +361,55 @@ const QuestionnairePresenter: React.FC<QuestionnairePresenterProps> = () => {
                </Group>
              )}
 
+            {currentQuestion.type === 'text' && !showAnswer && !waitingForManualGrading && (
+              <Stack align="center" gap="lg">
+                <Text size="lg" c="dimmed" ta="center">
+                  O aluno está a responder à pergunta...
+                </Text>
+                <Text size="sm" c="dimmed" ta="center">
+                  Aguarde o tempo acabar para avaliar a resposta
+                </Text>
+              </Stack>
+            )}
+
+            {currentQuestion.type === 'text' && waitingForManualGrading && (
+              <Stack align="center" gap="lg">
+                <Text size="lg" fw={500} ta="center">
+                  Avalie a resposta do participante:
+                </Text>
+                <Group gap="xl">
+                  <Button
+                    size="xl"
+                    color="green"
+                    leftSection={<IconCheck size={24} />}
+                    onClick={handleManualCorrect}
+                  >
+                    CORRETO
+                  </Button>
+                  <Button
+                    size="xl"
+                    color="red"
+                    leftSection={<IconX size={24} />}
+                    onClick={handleManualWrong}
+                  >
+                    ERRADO
+                  </Button>
+                </Group>
+              </Stack>
+            )}
+
+            {questionAnswered && !showAnswer && !waitingForManualGrading && (
+              <Stack align="center" gap="lg">
+                <Button
+                  size="xl"
+                  leftSection={<IconEye size={24} />}
+                  onClick={handleShowAnswer}
+                >
+                  Mostrar Resposta
+                </Button>
+              </Stack>
+            )}
+
             {showAnswer && (
               <Stack align="center" gap="lg">
                                  {questionResult === 'correct' && (
@@ -370,20 +457,6 @@ const QuestionnairePresenter: React.FC<QuestionnairePresenterProps> = () => {
 
                 </Stack>
              )}
-
-            {(questionResult === 'timeout' || !isTimerRunning) && !showAnswer && (
-              <Group>
-                <Button onClick={handleCorrectAnswer} color="green" size="lg">
-                  Aluno Acertou
-                </Button>
-                <Button onClick={handleWrongAnswer} color="red" size="lg">
-                  Aluno Errou
-                </Button>
-                <Button onClick={() => setShowAnswer(true)} variant="outline" size="lg">
-                  Mostrar Resposta
-                </Button>
-              </Group>
-            )}
           </Stack>
         </Card>
       </Stack>
