@@ -50,21 +50,45 @@ const QuestionnairePresenter: React.FC<QuestionnairePresenterProps> = () => {
 
   // Initialize session progress when questionnaire is loaded
   useEffect(() => {
-    if (isLoaded && questionnaire && !sessionProgress) {
-      const progress: SessionProgress = {
-        questionnaireId: questionnaire.id,
-        sessionId: uuidv4(),
-        startedAt: new Date(),
-        questions: questionnaire.questions.map((q: Question) => ({
-          questionId: q.id,
-          answered: false,
-          timeSpent: 0
-        })),
-        currentQuestionIndex: -1,
-        completed: false
+    if (isLoaded && questionnaire) {
+      if (!sessionProgress) {
+        const progress: SessionProgress = {
+          questionnaireId: questionnaire.id,
+          sessionId: uuidv4(),
+          startedAt: new Date(),
+          questions: questionnaire.questions.map((q: Question) => ({
+            questionId: q.id,
+            answered: false,
+            timeSpent: 0
+          })),
+          currentQuestionIndex: -1,
+          completed: false
+        }
+        setSessionProgress(progress)
+        saveSessionProgress(progress)
+      } else if (sessionProgress.questionnaireId === questionnaire.id) {
+        // Validate and repair session progress if needed
+        if (sessionProgress.questions.length !== questionnaire.questions.length) {
+          const repairedQuestions = questionnaire.questions.map((q: Question, index: number) => {
+            const existingProgress = sessionProgress.questions[index]
+            return existingProgress ? {
+              ...existingProgress,
+              questionId: q.id // ensure question ID is correct
+            } : {
+              questionId: q.id,
+              answered: false,
+              timeSpent: 0
+            }
+          })
+          
+          const repairedProgress = {
+            ...sessionProgress,
+            questions: repairedQuestions
+          }
+          setSessionProgress(repairedProgress)
+          saveSessionProgress(repairedProgress)
+        }
       }
-      setSessionProgress(progress)
-      saveSessionProgress(progress)
     }
   }, [isLoaded, questionnaire, sessionProgress, setSessionProgress, saveSessionProgress])
 
@@ -142,7 +166,8 @@ const QuestionnairePresenter: React.FC<QuestionnairePresenterProps> = () => {
     
     const updatedQuestions = [...sessionProgress.questions]
     updatedQuestions[questionIndex] = {
-      ...updatedQuestions[questionIndex],
+      ...(updatedQuestions[questionIndex] || {}),
+      questionId: questionnaire?.questions[questionIndex]?.id || '',
       answered: true,
       correct,
       timeSpent
@@ -377,7 +402,7 @@ const QuestionnairePresenter: React.FC<QuestionnairePresenterProps> = () => {
           </div>
           <Group>
             <Badge size="lg">
-              {sessionProgress?.questions.filter(q => q.answered).length || 0} / {questionnaire.questions.length} Completas
+              {sessionProgress?.questions.filter(q => q && q.answered).length || 0} / {questionnaire.questions.length} Completas
             </Badge>
             <Button
               leftSection={<IconRefresh size={16} />}
@@ -386,7 +411,7 @@ const QuestionnairePresenter: React.FC<QuestionnairePresenterProps> = () => {
                 if (!questionnaire) return
                 
                 // Save current session to history if it has progress
-                if (sessionProgress && sessionProgress.questions.some(q => q.answered)) {
+                if (sessionProgress && sessionProgress.questions.some(q => q && q.answered)) {
                   saveSessionToHistory(sessionProgress)
                 }
                 
